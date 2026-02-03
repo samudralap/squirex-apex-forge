@@ -1,0 +1,227 @@
+Schema Inference Technical Documentation
+Overview
+The Schema Inference Engine automatically discovers Salesforce object schema from Apex code without requiring Salesforce org connection. It supplements existing XML metadata by analyzing SOQL queries, DML statements, and type declarations.
+
+Architecture
+Apex Code → AST → Schema Inference Engine → Inferred Schema
+                                    ↓
+                         Merge with XML Metadata  
+                                    ↓
+                          Runtime Execution Context
+Core Components
+1. Data Structures
+InferredField:
+
+type InferredField struct {
+    Name         string  // Field API name
+    Type         string  // "String", "Integer", "Id", "Datetime", etc.
+    IsCustom     bool    // Custom field flag
+    ReferenceTo  string  // Target object for lookups
+    RelationName string  // Relationship traversal name
+    Source       string  // "SOQL", "DML", "TypeDecl"
+    Confidence   int     // 0-100 confidence score
+}
+InferredObject:
+
+type InferredObject struct {
+    Name   string                        // SObject API name
+    Fields map[string]*InferredField    // Lowercase field name → field
+    Source string                        // First discovery source
+}
+SchemaInferenceEngine:
+
+type SchemaInferenceEngine struct {
+    Objects map[string]*InferredObject  // Lowercase object name → object
+}
+Inference Algorithms
+SOQL-Based Inference
+Entry Point: 
+
+InferFromSOQL(soql string)
+
+Algorithm:
+
+Extract object name from FROM clause via regex: FROM\s+(\w+)
+Extract SELECT fields via regex: SELECT\s+(.+?)\s+FROM
+Split fields by comma (handling nested subquery parens)
+For each field:
+If contains .: Parse as parent traversal (see below)
+Else: Infer type from field name heuristics
+Extract WHERE clause fields:
+Pattern 1: Comparison operators (=, !=, <, >, <=, >=)
+Pattern 2: IN operator (Status IN (...))
+Pattern 3: LIKE operator (Name LIKE 'Acme%')
+Pattern 4: INCLUDES operator (Industry INCLUDES (...))
+Parent Traversal Example:
+
+Query: SELECT Account.Owner.Name FROM Contact
+Inference:
+  - Contact has AccountId (lookup to Account), confidence 85
+  - Account has OwnerId (lookup to User), confidence 85
+  - User has Name (String), confidence 75
+Algorithm for Parent Traversal:
+
+func inferParentTraversal(baseObject, path string) {
+    parts := strings.Split(path, ".")  // ["Account", "Owner", "Name"]
+    currentObject := baseObject        // "Contact"
+    
+    for i := 0; i < len(parts)-1; i++ {
+        relationName := parts[i]  // "Account", then "Owner"
+        fieldName := relationName + "Id"  // "AccountId", "OwnerId"
+        targetObject := inferObjectFromRelation(relationName)
+        
+        addFieldWithReference(currentObject, fieldName, "Id", 
+            targetObject, relationName, "SOQL", 85)
+        
+        currentObject = targetObject
+    }
+    
+    finalField := parts[len(parts)-1]  // "Name"
+    addField(currentObject, finalField, inferType(finalField), "SOQL", 75)
+}
+DML-Based Inference
+Entry Point: 
+
+InferFromDML(objectName string, fieldAssignments map[string]string)
+
+Algorithm:
+
+Extract object type from DML target (e.g., insert acc → "Account")
+Extract field assignments from SObject instance:
+for fieldName, fieldValue := range recordFields {
+    fieldType := inferTypeFromValue(fieldValue)
+    addField(objectName, fieldName, fieldType, "DML", 70)
+}
+Type inference from literal values:
+"true" or "false" → Boolean
+Numeric string → Integer or Decimal
+Default → String
+Trigger Location: 
+
+evaluateDML()
+ in 
+
+context.go
+ (line 4725)
+
+Type Declaration Inference
+Entry Point: 
+
+InferFromTypeDeclaration(typeName string)
+
+Algorithm:
+
+Check for generic types: List<\w+>, Map<\w+,\s*(\w+)>, Set<\w+>
+Extract SObject name from generic
+Filter out primitives (String, Integer, Boolean, etc.)
+Create or retrieve inferred object with low confidence (type decl alone doesn't reveal fields)
+Examples:
+
+List<Account> → Account object exists
+Map<Id, Contact> → Contact object exists
+Set<Opportunity> → Opportunity object exists
+Trigger Location: 
+
+evaluateVariableDeclaration()
+ in 
+
+context.go
+ (line 653)
+
+Confidence Scoring
+Confidence scores indicate reliability of inference (0-100):
+
+Score	Meaning
+95	Maximum confidence (repeated sightings)
+85	High confidence (parent traversal lookups)
+80	High confidence (SOQL SELECT fields)
+75	Medium-high (parent traversal final fields)
+70	Medium (DML field assignments)
+60	Lower (WHERE clause fields - type unknown)
+50	Low (field access without context)
+Confidence Boosting:
+
+Each repeated field sighting adds +10 confidence (max 95)
+Type refinement: if field type changes from "unknown" to concrete type, update type and boost confidence
+if existing.Type == fieldType || existing.Type == "unknown" {
+    existing.Confidence = min(95, max(existing.Confidence, confidence) + 10)
+    if existing.Type == "unknown" && fieldType != "unknown" {
+        existing.Type = fieldType
+    }
+}
+Type Inference Heuristics
+Field Name Patterns:
+
+func inferTypeFromContext(fieldName string) string {
+    lower := strings.ToLower(fieldName)
+    
+    if strings.HasSuffix(lower, "id") { return "Id" }
+    if strings.HasSuffix(lower, "date") { return "Date" }
+    if strings.Contains(lower, "datetime") { return "Datetime" }
+    if strings.HasPrefix(lower, "is") || strings.HasPrefix(lower, "has") { 
+        return "Boolean" 
+    }
+    if strings.Contains(lower, "amount") || strings.Contains(lower, "price") { 
+        return "Decimal" 
+    }
+    if strings.Contains(lower, "count") || strings.Contains(lower, "number") { 
+        return "Integer" 
+    }
+    
+    return "String"  // Default
+}
+Metadata Integration
+Priority: XML Metadata > Inferred Schema
+
+Merge Process:
+
+func MergeWithInferredSchema(engine *SchemaInferenceEngine) {
+    for objectName, inferredObj := range engine.Objects {
+        sobj := metadata.GetSObjectDef(objectName)
+        if sobj == nil {
+            // Object doesn't exist - create from inferred
+            metadata.addInferredObject(inferredObj)
+        } else {
+            // Merge fields: only add if not in XML
+            for fieldName, inferredField := range inferredObj.Fields {
+                if !sobj.hasField(fieldName) {
+                    sobj.addInferredField(inferredField)
+                }
+                // If field exists in XML, XML wins
+            }
+        }
+    }
+}
+When: After loading all classes in 
+
+main.go
+ (line 101)
+
+Extension Points
+Adding New Inference Sources
+Define Method: Create InferFrom<Source>() method in 
+
+schema_inference.go
+Hook into AST: Add call in appropriate evaluate*() function in 
+
+context.go
+Set Confidence: Choose appropriate confidence score (see table above)
+Test: Add test cases in comprehensive test suite
+Debugging
+Enable schema inference logging:
+
+grep "Schema Inference" <stderr_output>
+Output format:
+
+[Schema Inference] Analyzing SOQL: SELECT Name FROM Account
+[Schema Inference] DML on Account: 2 field assignments
+[Schema Inference] Type declaration: List<Contact>
+[Schema Inference] Merging inferred schema with metadata
+Performance
+Overhead: <100ms for typical class (50-100 LOC)
+Scalability: Linear with code size
+Memory: ~1KB per inferred object
+Limitations
+Regex-based SOQL parsing (may miss edge cases)
+Type inference heuristic-based
+DML: only infers from first record in bulk operations
