@@ -1,127 +1,79 @@
 # Command Reference
 
-## `apexforge run` — Execute Tests
+## `squirex scan` — Agentforce Capability Scan
 
-Run Apex tests locally with full mock runtime support.
+Run a static capability scan on Agentforce metadata files to detect configuration vulnerabilities like Excessive Agency and missing FLS masking.
 
 ```bash
-apexforge run [options]
+squirex scan [options]
 ```
 
 ### Options
-- `-f, --file <files...>`: Specific files to test
-- `-d, --directory <dir>`: Directory to scan for tests (default: ".")
-- `-p, --pattern <pattern>`: File pattern to match (default: "**/*Test.cls")
-- `--filter <regex>`: Filter test methods by regex
-- `-s, --schema <file>`: Schema JSON file for SObject validation
-- `-v, --verbose`: Verbose output with debug info
-- `-j, --json`: Output results as JSON
-- `--junit <file>`: Output JUnit XML report
-- `--timeout <ms>`: Test timeout in milliseconds (default: 30000)
-- `--fail-fast`: Stop on first failure
-- `--parallel`: Run tests in parallel
-- `--max-parallel <n>`: Max parallel tests (default: 4)
+- `-d, --directory <dir>`: Workspace root directory (default: ".")
+- `--sarif <file>`: Output SARIF to file (default: stdout)
+- `--rules <ids>`: Comma-separated rule IDs to run (default: all)
 
 ### Examples
 ```bash
-# Run with verbose output
-apexforge run -v
+# Full workspace scan
+squirex scan
 
-# Run specific class with JSON output
-apexforge run -f AccountUtilsTest.cls --json
+# Output SARIF for CI/CD integration
+squirex scan --sarif results.sarif
 
-# Generate JUnit report for CI
-apexforge run --junit test-results.xml
-
-# Run tests in parallel
-apexforge run --parallel --max-parallel 8
+# Scan only for Prompt Injection and FLS rules
+squirex scan --rules AGENTFORCE-1.1,AGENTFORCE-1.3
 ```
 
 ---
 
-## `apexforge conflict` — Predict Merge Conflicts
+## `squirex scan-pr` — PR Delta Scan
 
-Analyze two branches to predict Apex merge conflicts before they happen.
+Run Agentforce Capability Scan scoped only to lines and files changed in the pull request.
 
 ```bash
-apexforge conflict [options]
+squirex scan-pr -b <branch> [options]
 ```
 
 ### Required
-- `-b, --branches <b1,b2>`: Two branches to compare (comma-separated)
+- `-b, --base <branch>`: Base branch to diff against (e.g., `main`)
 
 ### Options
-- `-d, --directory <dir>`: Repository directory (default: ".")
-- `-f, --files <patterns>`: File patterns to analyze
-- `--simulate`: Simulate merge and predict test outcomes
-- `--format <format>`: Output format: console, json, markdown, html (default: console)
-- `-o, --output <file>`: Output file for report
-- `-v, --verbose`: Verbose output
+- `-d, --directory <dir>`: Workspace root directory (default: ".")
+- `--sarif <file>`: Output SARIF to file (default: stdout)
+
+### Examples
+```bash
+# Compare against main
+squirex scan-pr -b main
+
+# Output SARIF for CI/CD integration
+squirex scan-pr -b main --sarif report.sarif
+```
+
+---
+
+## `squirex run` — Secondary: Local Apex Runtime
+
+Run Apex tests locally with full mock runtime support.
+
+### Examples
+```bash
+# Run tests in current directory
+squirex run
+
+# Run specific class
+squirex run -f AccountUtilsTest.cls
+```
+
+---
+
+## `squirex conflict` — Secondary: Conflict Prediction
+
+Analyze two branches to predict Apex merge conflicts before they happen.
 
 ### Examples
 ```bash
 # Compare main with feature branch
-apexforge conflict -b main,feature/new-accounts
-
-# Full simulation with predictions
-apexforge conflict -b develop,feature/api-update --simulate -v
-
-# Generate markdown report
-apexforge conflict -b main,release/v2 --format markdown -o conflict-report.md
-```
-
----
-
-## `apexforge parse` — Debug Parser Output
-
-Parse an Apex file and display the AST structure.
-
-```bash
-apexforge parse <file> [options]
-```
-
-### Options
-- `-o, --output <format>`: Output format: json, tree (default: tree)
-- `--tests`: Extract test method information
-- `--soql`: Extract SOQL queries
-- `--dml`: Extract DML statements
-
-### Examples
-```bash
-# View AST tree
-apexforge parse AccountService.cls
-
-# Extract as JSON
-apexforge parse MyClass.cls -o json
-
-# Show test methods only
-apexforge parse AccountTest.cls --tests
-```
-
----
-
-## `apexforge hook` — Git Hook Management
-
-Install git hooks for automatic test validation.
-
-```bash
-apexforge hook [options]
-```
-
-### Options
-- `--install`: Install git hooks
-- `--uninstall`: Remove git hooks
-- `--type <type>`: Hook type: pre-commit, pre-push, pre-merge (default: pre-commit)
-- `-d, --directory <dir>`: Git repository directory (default: ".")
-
-### Examples
-```bash
-# Show hook status
-apexforge hook
-
-# Install pre-commit hook
-apexforge hook --install
-
-# Install pre-push hook
-apexforge hook --install --type pre-push
+squirex conflict -b main,feature/new-accounts
 ```

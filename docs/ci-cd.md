@@ -1,129 +1,75 @@
 # CI/CD Integration
 
-## GitHub Actions — Using Binary Releases
-Download and use the pre-built binary in your CI pipeline:
+SquireX operates natively in CI/CD pipelines. To execute SquireX in any CI environment (e.g. GitHub Actions, GitLab, Jenkins) you must have an active **Enterprise License** and provide your license key as an environment variable (`SQUIREX_LICENSE_KEY`).
+
+## GitHub Actions — Capability Scan (SARIF)
+
+Use SquireX to generate SARIF reports for GitHub Advanced Security on pull requests.
 
 ```yaml
-name: Apex Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Download ApexForge
-        run: |
-          curl -L -o apexforge https://github.com/samudralap/ApexForge/releases/latest/download/apexforge-linux-x64
-          chmod +x apexforge
-          sudo mv apexforge /usr/local/bin/
-          
-      - name: Verify Installation
-        run: apexforge --version
-        
-      - name: Run Apex Tests
-        run: apexforge run -d force-app/main/default/classes --junit test-results.xml
-        
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: test-results.xml
-          
-      - name: Publish Test Report
-        uses: mikepenz/action-junit-report@v4
-        if: always()
-        with:
-          report_paths: 'test-results.xml'
-```
-
-## GitHub Actions — Conflict Detection on PRs
-
-```yaml
-name: Conflict Analysis
+name: Agentforce Capability Scan
 
 on:
   pull_request:
     branches: [main, develop]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
-  analyze:
+  squirex-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for branch comparison
+          fetch-depth: 0  # Full history to diff against base branch
       
-      - name: Download ApexForge
+      - name: Download SquireX
         run: |
-          curl -L -o apexforge https://github.com/samudralap/ApexForge/releases/latest/download/apexforge-linux-x64
-          chmod +x apexforge
+          curl -L -o squirex https://github.com/samudralap/squirex-apex-forge/releases/latest/download/squirex-linux-x64
+          chmod +x squirex
+          sudo mv squirex /usr/local/bin/
           
-      - name: Analyze Conflicts
-        run: |
-          ./apexforge conflict \
-            -b ${{ github.base_ref }},${{ github.head_ref }} \
-            --simulate \
-            --format markdown \
-            -o conflict-report.md
+      - name: Run Agentforce Capability Scan
+        env:
+          SQUIREX_LICENSE_KEY: ${{ secrets.SQUIREX_LICENSE_KEY }}
+        run: squirex scan-pr -b ${{ github.base_ref }} --sarif results.sarif
             
-      - name: Comment on PR
-        uses: actions/github-script@v7
+      - name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          script: |
-            const fs = require('fs');
-            const report = fs.readFileSync('conflict-report.md', 'utf8');
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: report
-            });
+          sarif_file: results.sarif
+          category: agentforce-capability
 ```
 
 ## GitLab CI
 
 ```yaml
-apex-tests:
+agentforce-capability:
   stage: test
-  image: node:18
+  image: ubuntu:latest
   before_script:
-    - curl -L -o /usr/local/bin/apexforge https://github.com/samudralap/ApexForge/releases/latest/download/apexforge-linux-x64
-    - chmod +x /usr/local/bin/apexforge
+    - apt-get update && apt-get install -y curl
+    - curl -L -o /usr/local/bin/squirex https://github.com/samudralap/squirex-apex-forge/releases/latest/download/squirex-linux-x64
+    - chmod +x /usr/local/bin/squirex
   script:
-    - apexforge run --junit test-results.xml
+    - squirex scan -d ./force-app --sarif gl-capability-report.json
   artifacts:
     reports:
-      junit: test-results.xml
+      sast: gl-capability-report.json
+  variables:
+    SQUIREX_LICENSE_KEY: $SQUIREX_LICENSE_KEY
 ```
 
-## Jenkins Pipeline
+---
 
-```groovy
-pipeline {
-    agent any
-    stages {
-        stage('Setup') {
-            steps {
-                sh '''
-                    curl -L -o apexforge https://github.com/samudralap/ApexForge/releases/latest/download/apexforge-linux-x64
-                    chmod +x apexforge
-                '''
-            }
-        }
-        stage('Test') {
-            steps {
-                sh './apexforge run --junit test-results.xml'
-            }
-            post {
-                always {
-                    junit 'test-results.xml'
-                }
-            }
-        }
-    }
-}
+## Secondary: Legacy Apex Tests
+
+If you wish to run the legacy local Apex runtime tests in CI, the same Enterprise License requirements apply.
+
+```yaml
+      - name: Run Apex Tests
+        env:
+          SQUIREX_LICENSE_KEY: ${{ secrets.SQUIREX_LICENSE_KEY }}
+        run: squirex run -d force-app/main/default/classes --junit test-results.xml
 ```

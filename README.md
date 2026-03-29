@@ -1,45 +1,84 @@
-# ApexForge 🔨
+# SquireX ⚡
 
 [![License](https://img.shields.io/github/license/samudralap/squirex-apex-forge)](LICENSE.md)
 [![Release](https://img.shields.io/github/v/release/samudralap/squirex-apex-forge)](https://github.com/samudralap/squirex-apex-forge/releases)
-[![Build Status](https://github.com/samudralap/squirex-apex-forge/actions/workflows/release.yml/badge.svg)](https://github.com/samudralap/squirex-apex-forge/actions)
 
-**Local Apex test execution and branch conflict prediction CLI**
+**Agentforce Capability Scan · Local Apex Runtime · CI/CD Security Scanning**
 
-Run Salesforce Apex tests locally without deploying to an org. ApexForge parses your Apex code, executes it against an in-memory mock runtime, and predicts merge conflicts before they happen.
+SquireX is a high-fidelity static analysis engine and mock runtime for Salesforce. It parses your Agentforce definitions and Apex code, executes them against an in-memory runtime, and detects critical configuration vulnerabilities before they reach production.
+
+## Agentforce Capability Scan
+
+The primary engine of SquireX performs deterministic capability scanning on your Agentforce metadata (`.agent`, `.genAiFunction-meta.xml`, `schema.json`).
+
+*   **Prompt Injection Detection**: Identifies inputs missing defensive XML tags.
+*   **Excessive Agency Prevention**: Enforces manual confirmation requirements for state-modifying actions.
+*   **FLS Masking Verification**: Flags explicit field references in Prompt Templates to ensure Einstein Trust Layer applicability.
+*   **Schema Drift**: Detects mismatches between Open API schemas and standard metadata definitions.
+
+## Licensing Tiers
+
+SquireX operates on a dual-tier model:
+
+| Tier | Price | Capabilities |
+|------|-------|--------------|
+| **Community** | **Free** | Unlimited local execution of `squirex scan` and `squirex run` on your private machine. |
+| **Enterprise** | **$1000/mo** | Unlocks CI/CD execution. Capable of generating SARIF reports and blocking PRs in GitHub Actions, GitLab CI, and Bitbucket. |
+
+*To purchase an Enterprise license key, visit [squirex.dev](https://squirex.dev).*
 
 ## Installation
 
 ### Quick Install (macOS / Linux)
 ```bash
-curl -L -o apexforge https://github.com/samudralap/ApexForge/releases/latest/download/apexforge-macos-arm64
-chmod +x apexforge
-sudo mv apexforge /usr/local/bin/
-apexforge --version
+curl -L -o squirex https://github.com/samudralap/squirex-apex-forge/releases/latest/download/squirex-macos-arm64
+chmod +x squirex
+sudo mv squirex /usr/local/bin/
+squirex --version
 ```
-> Note: Replace `apexforge-macos-arm64` with the appropriate binary for your system if needed.
-
-For Windows and detailed installation instructions, see [Installation Docs](docs/installation.md).
+> Note: Replace `squirex-macos-arm64` with the appropriate binary for your system (`squirex-linux-x64`, `squirex-win-x64.exe`, etc.)
 
 ## Quick Start
+
+### 1. Capability Scanning (Primary)
 ```bash
-# Run all test classes in current directory
-apexforge run
+# Run full workspace Agentforce scan
+squirex scan -d ./force-app
 
-# Run tests from specific directory
-apexforge run -d force-app/main/default/classes
+# Run specific rules and output SARIF for CI/CD
+squirex scan -d ./force-app --rules AGENTFORCE-1.1,AGENTFORCE-1.3 --sarif results.sarif
 
-# Analyze branches for conflicts
-apexforge conflict -b main,feature/my-feature
+# Scan only what changed in your Pull Request
+squirex scan-pr -b main
+```
+
+### 2. Local Apex Runtime (Secondary)
+```bash
+# Run all test classes locally without deploying
+squirex run
+
+# Predict merge conflicts before they happen
+squirex conflict -b main,feature/my-feature
 ```
 
 ## Documentation
 - [Installation Guide](docs/installation.md)
 - [Command Reference](docs/commands.md)
-- [Runtime Features & Limits](docs/features.md)
 - [CI/CD Integration](docs/ci-cd.md)
-- [VS Code Extension](docs/vscode-extension.md)
+- [Runtime Features & Limits](docs/features.md)
+
+## Enterprise CI/CD Setup
+
+To run SquireX inside a CI/CD pipeline, you must provide your Enterprise License Key via the `SQUIREX_LICENSE_KEY` environment variable.
+
+```yaml
+- name: Run Agentforce Capability Scan
+  env:
+    SQUIREX_LICENSE_KEY: ${{ secrets.SQUIREX_LICENSE_KEY }}
+  run: squirex scan -d ./force-app --sarif results.sarif
+```
+If executed in a CI environment (e.g. `GITHUB_ACTIONS=true`) without a valid key, the engine will safely abort.
 
 ## License
 Proprietary Software — See [LICENSE.md](LICENSE.md) for terms.
-Copyright © 2026 Prasanth Samudrala. All Rights Reserved.
+Copyright © 2026 SquireX. All Rights Reserved.
