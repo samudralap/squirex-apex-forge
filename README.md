@@ -64,10 +64,9 @@ Your Salesforce Project
 ┌──────────────────────────────────────────────────┐
 │  SquireX Engine                                  │
 │                                                  │
-│  1. Parse    → 10 metadata parsers               │
-│  2. Link     → Semantic Graph (15 node types,    │
-│                 12 edge types)                    │
-│  3. Evaluate → 26 security rules                 │
+│  1. Parse    → SF metadata parsers               │
+│  2. Link     → Semantic Graph                    │
+│  3. Evaluate →  security rules                   │
 │  4. Output   → SARIF v2.1.0                      │
 └──────────────────────────────────────────────────┘
   │
@@ -116,7 +115,6 @@ sf org login web --alias my-sandbox --instance-url https://test.salesforce.com
 sf org display --target-org my-sandbox
 ```
 
-All **26 rules** have dedicated test generators with normalized `AGENTFORCE-X.Y` identifiers.
 
 ### MCP Server Integration
 
@@ -201,7 +199,7 @@ For licensing inquiries: **hello@squirex.dev**
 |---|---|
 | [Getting Started](docs/getting-started.md) | First scan walkthrough and reading results |
 | [Installation](docs/installation.md) | Platform-specific installation instructions |
-| [Security Rules Reference](docs/security-rules.md) | All 26 rules with remediation guidance |
+| [Security Rules Reference](docs/security-rules.md) | All rules with remediation guidance |
 | [CI/CD Integration](docs/ci-cd.md) | GitHub Actions, GitLab CI, Bitbucket, Azure DevOps |
 | [Command Reference](docs/commands.md) | All CLI commands and flags |
 | [Enterprise Guide](docs/enterprise.md) | License activation, support, and SLA |
